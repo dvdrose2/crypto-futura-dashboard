@@ -2,34 +2,78 @@ import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/Navbar";
 import { PriceTicker } from "@/components/PriceTicker";
 import { CryptoCard } from "@/components/CryptoCard";
+import { toast } from "sonner";
+
+const fetchWithRetry = async (url: string, retries = 3, delay = 1000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url);
+      if (response.status === 429) {
+        // If rate limited, wait longer before next retry
+        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+        continue;
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+    }
+  }
+};
 
 const Index = () => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["cryptoData"],
     queryFn: async () => {
-      const response = await fetch(
-        "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=12&sparkline=false"
-      );
-      const markets = await response.json();
-      
-      // Fetch additional data for descriptions
-      const detailedData = await Promise.all(
-        markets.map(async (crypto: any) => {
-          const detailResponse = await fetch(
-            `https://api.coingecko.com/api/v3/coins/${crypto.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`
-          );
-          const detail = await detailResponse.json();
-          return {
-            ...crypto,
-            description: detail.description.en.split(". ")[0] + ".",
-          };
-        })
-      );
-      
-      return detailedData;
+      try {
+        // First fetch the markets data
+        const markets = await fetchWithRetry(
+          "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=12&sparkline=false"
+        );
+        
+        // Then fetch detailed data with delay between requests
+        const detailedData = await Promise.all(
+          markets.map(async (crypto: any, index: number) => {
+            // Add delay between requests to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, index * 1000));
+            
+            try {
+              const detail = await fetchWithRetry(
+                `https://api.coingecko.com/api/v3/coins/${crypto.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`
+              );
+              
+              return {
+                ...crypto,
+                description: detail.description?.en?.split(". ")[0] + "." || "No description available.",
+              };
+            } catch (error) {
+              console.error(`Error fetching details for ${crypto.id}:`, error);
+              return {
+                ...crypto,
+                description: "Description temporarily unavailable.",
+              };
+            }
+          })
+        );
+        
+        return detailedData;
+      } catch (error) {
+        console.error("Error fetching crypto data:", error);
+        toast.error("Failed to fetch some cryptocurrency data. Please try again later.");
+        throw error;
+      }
     },
     refetchInterval: 30000,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2, attemptIndex), 30000),
   });
+
+  if (error) {
+    toast.error("Failed to load cryptocurrency data. Please try again later.");
+  }
 
   return (
     <div className="min-h-screen">
