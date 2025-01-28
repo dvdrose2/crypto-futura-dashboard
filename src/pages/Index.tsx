@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { PriceTicker } from "@/components/PriceTicker";
 import { CryptoCard } from "@/components/CryptoCard";
@@ -25,6 +26,8 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 1000) => {
 };
 
 const Index = () => {
+  const [activeChart, setActiveChart] = useState<string | null>(null);
+  
   const { data, isLoading, error } = useQuery({
     queryKey: ["cryptoData"],
     queryFn: async () => {
@@ -75,6 +78,10 @@ const Index = () => {
     toast.error("Failed to load cryptocurrency data. Please try again later.");
   }
 
+  const handleChartClick = (symbol: string) => {
+    setActiveChart(activeChart === symbol ? null : symbol);
+  };
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -101,6 +108,8 @@ const Index = () => {
                   marketCap={crypto.market_cap}
                   description={crypto.description}
                   priceChange={crypto.price_change_percentage_24h}
+                  activeChart={activeChart}
+                  onChartClick={handleChartClick}
                 />
               ))}
             </div>

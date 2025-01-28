@@ -17,6 +17,8 @@ interface CryptoCardProps {
   marketCap: number;
   description: string;
   priceChange: number;
+  activeChart: string | null;
+  onChartClick: (symbol: string) => void;
 }
 
 export const CryptoCard = ({
@@ -26,11 +28,17 @@ export const CryptoCard = ({
   marketCap,
   description,
   priceChange,
+  activeChart,
+  onChartClick,
 }: CryptoCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const isChartVisible = activeChart === symbol;
 
   return (
-    <Card className="glass">
+    <Card 
+      className="glass cursor-pointer transition-all duration-300 hover:scale-[1.02]"
+      onClick={() => onChartClick(symbol)}
+    >
       <CardHeader>
         <CardTitle className="flex justify-between">
           <span>{name}</span>
@@ -53,7 +61,7 @@ export const CryptoCard = ({
       </CardHeader>
       <CardContent>
         <div className="mb-4">
-          <CryptoChart symbol={symbol} />
+          {isChartVisible && <CryptoChart symbol={symbol} />}
         </div>
         <div className="space-y-4">
           <div>
@@ -64,7 +72,10 @@ export const CryptoCard = ({
             <Button
               variant="ghost"
               className="w-full justify-between"
-              onClick={() => setIsExpanded(!isExpanded)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpanded(!isExpanded);
+              }}
             >
               Project Details
               {isExpanded ? <ChevronUp /> : <ChevronDown />}
